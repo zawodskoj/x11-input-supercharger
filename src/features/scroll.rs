@@ -13,6 +13,7 @@ pub struct ScrollConfig {
     pub hold: bool,
     pub speed: u32,
     pub button_id: u8,
+    pub reverse: bool,
     pub indicator: bool,
     pub indicator_size: u16,
     pub cancel_on_keypress: bool,
@@ -70,10 +71,13 @@ impl<'a> Scroll<'a> {
             self.gui_thread.send(GuiThread::Input::HideCrosshair);
             scroll_thread.stop();
         } else {
-            self.gui_thread.send(GuiThread::Input::ShowCrosshair);
+            if (self.config.indicator) {
+                self.gui_thread.send(GuiThread::Input::ShowCrosshair);
+            }
             self.scroll_thread = Some(
                 ScrollThread::Actor {
                     speed: self.config.speed as i64,
+                    reverse: self.config.reverse as bool
                 }
                 .start(),
             );
@@ -81,16 +85,22 @@ impl<'a> Scroll<'a> {
     }
 }
 
+fn get_current_y(reverse: bool) -> i64 {
+    let actual_y = xdotool::get_current_y();
+    return if reverse { -(actual_y as i64) } else { actual_y as i64 };
+}
+
 actor! {
     ScrollThread
     data:
         pub speed: i64,
+        pub reverse: bool,
     on_init:
-        let original_y = xdotool::get_current_y();
+        let original_y = get_current_y(self.reverse);
         let mut progress_towards_next_event: i64 = 0;
     tick_interval: 16,
     on_tick:
-        let current_y = xdotool::get_current_y();
+        let current_y = get_current_y(self.reverse);
         let diff = i64::from(current_y) - i64::from(original_y);
 
         if diff < 0 && progress_towards_next_event > 0 {
